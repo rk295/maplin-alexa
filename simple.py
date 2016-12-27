@@ -30,7 +30,7 @@ def lambda_handler(event=None, context=None):
     config_topic = os.getenv('MQTT_CONFIG_TOPIC')
     action_topic = os.getenv('MQTT_ACTION_TOPIC')
     username = os.getenv('MQTT_USERNAME', None)
-    sword = os.getenv('MQTT_PASSWORD', None)
+    password = os.getenv('MQTT_PASSWORD', None)
 
     if username is not None and password is not None:
         logging.debug(
@@ -49,8 +49,11 @@ def lambda_handler(event=None, context=None):
         # JSON in the retained message. This will give us all the possible room
         # names.
         logger.info("service discovery request")
-        switch_config = json.loads(
-            get_config(hostname, port, auth, config_topic))
+        try:
+            switch_config = get_config(hostname, port, auth, config_topic)
+        except Exception as e:
+            logger.error("get_config failed, can't continue")
+            sys.exit(1)
 
         # handle_discovery walks the dict from get_config constructing a valid
         # Alexa response for a discovery request.
@@ -147,7 +150,7 @@ def handle_control(event, hostname, port, auth, action_topic):
     elif event_action == "TurnOffRequest":
         action = "off"
         action_confirmation = "TurnOffConfirmation"
-    else
+    else:
         logger.error("Action wasn't TurnOnRequest or TurnOffConfirmation")
         logger.error("Can't continue")
         sys.exit(1)
@@ -210,7 +213,13 @@ def get_config(hostname, port, auth, config_topic):
         logging.error("failed to connect: %s" % e)
         sys.exit(1)
 
-    return msg.payload
+    try:
+        switches = json.loads(msg.payload)
+    except Exception as e:
+        logger.error("Failed to parse JSON from message")
+        raise
+
+    return switches
 
 
 if __name__ == "__main__":
