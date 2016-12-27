@@ -197,8 +197,6 @@ def handle_control(event, hostname, port, auth, action_topic):
 
 def get_config(hostname, port, auth, config_topic):
 
-    global logger
-
     try:
         logger.debug("Retrieving a single message from topic=%s" %
                      config_topic)
