@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
 
-baseDir="/Users/robin/GIT/maplin-alexa"
-zipName="rk-test.zip"
-functionName="${zipName%%.zip}"
+#
+# Hacky script to upload a Lambda zip file to your AWS account. The name of the
+# Lambda function is taken from the name of the zip, without the `.zip` suffix.
+#
+# Optionally looks for the following environment variables:
+#
+# * ZIP_NAME        - Name of the zip file to create, defaults to 'rk-test.zip'.
+# * AWS_PROFILE     - Name of the awscli profile to use, defaults to 'robin'.
+#
+set -euo pipefail
 
-cd "$baseDir" || exit 1
+cd "${0%/*}" || exit 1
+baseDir=$(pwd)
 
-aws --profile robin \
+: ${ZIP_NAME:="rk-test.zip"}
+: ${AWS_PROFILE:="robin"}
+
+functionName="${ZIP_NAME%%.zip}"
+
+aws --profile "$AWS_PROFILE" \
     lambda \
     update-function-code \
     --function-name "$functionName" \
-    --zip-file fileb://"$zipName"
+    --zip-file fileb://"$ZIP_NAME"
