@@ -12,7 +12,6 @@
 set -euo pipefail
 
 cd "${0%/*}" || exit 1
-baseDir=$(pwd)
 
 : ${ZIP_NAME:="rk-test.zip"}
 : ${AWS_PROFILE:="robin"}
