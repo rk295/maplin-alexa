@@ -7,7 +7,8 @@ import sys
 import json
 import base64
 
-logging.basicConfig()
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s %(funcName)s:%(lineno)d %(message)s')
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
@@ -49,9 +50,9 @@ def lambda_handler(event=None, context=None):
         logger.info("service discovery request")
         try:
             switch_config = get_config(hostname, port, auth, config_topic)
-        except Exception as e:
+        except Exception:
             logger.error("get_config failed, can't continue")
-            logger.error(e.msg)
+            # TODO: Handle this, and return an empty discovery object.
             sys.exit(1)
 
         # handle_discovery walks the dict from get_config constructing a valid
@@ -212,8 +213,8 @@ def get_config(hostname, port, auth, config_topic):
                                )
         logger.debug("Retrieved a message payload=%s" % msg.payload)
     except Exception as e:
-        logging.error("failed to connect: %s" % e)
-        sys.exit(1)
+        logging.error("failed to connect: %s %s" % (e.errno, e.strerror))
+        raise
 
     try:
         switches = json.loads(msg.payload)
