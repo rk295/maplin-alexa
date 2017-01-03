@@ -16,11 +16,11 @@ logger.info("Starting")
 
 def lambda_handler(event=None, context=None):
     #
-    # lambda_handler is the main entry point for AWS lambda, it receives an 'event'
-    # and a lamba context object.
+    # lambda_handler is the main entry point for AWS lambda, it receives an
+    # 'event' and a lamba context object.
     #
-    # Parsing the event lets us figure out if this is a service discovery event or
-    # a control event (Switch something on or off)
+    # Parsing the event lets us figure out if this is a service discovery event
+    # or a control event (Switch something on or off)
     #
     logger.debug("incoming event=%s" % json.dumps(event))
 
@@ -33,12 +33,10 @@ def lambda_handler(event=None, context=None):
     password = os.getenv('MQTT_PASSWORD', None)
 
     if username is not None and password is not None:
-        logging.debug(
-            "username and password detected, connecting to MQTT with authentication")
+        logging.debug("Connecting to MQTT with authentication")
         auth = {'username': username, 'password': password}
     else:
-        logging.debug(
-            "No username or password, connecting to MQTT without authentication")
+        logging.debug("Connecting to MQTT without authentication")
 
     logger.debug("MQTT connecting to host=%s:%s" % (hostname, port))
     logger.debug("config_topic=%s" % config_topic)
@@ -53,6 +51,7 @@ def lambda_handler(event=None, context=None):
             switch_config = get_config(hostname, port, auth, config_topic)
         except Exception as e:
             logger.error("get_config failed, can't continue")
+            logger.error(e.msg)
             sys.exit(1)
 
         # handle_discovery walks the dict from get_config constructing a valid
@@ -71,10 +70,10 @@ def lambda_handler(event=None, context=None):
 
 def handle_discovery(switch_config):
     #
-    # Requires the original inbound lambda event, and a switch config dictionary
-    # which is the parsed JSON object that sits as a retained message on the
-    # topic defined in 'config_topic'.
-    #
+    # Requires the original inbound lambda event, and a switch config
+    # dictionary which is the parsed JSON object that sits as a retained
+    # message on the topic defined in 'config_topic'.
+
     # First we create a header, and then for each room we bung a device section
     # into the 'discoveredAppliances' array, inside the payload object of the
     # response.
@@ -171,8 +170,13 @@ def handle_control(event, hostname, port, auth, action_topic):
     # Try and publish this to MQTT, using websockets as a transport here,
     # because thats all I expose externally for MQTT.
     try:
-        publish.single(action_topic, payload=json.dumps(mqtt_payload), retain=False, hostname=hostname,
-                       port=port, auth=auth, transport="websockets")
+        publish.single(action_topic,
+                       payload=json.dumps(mqtt_payload),
+                       retain=False,
+                       hostname=hostname,
+                       port=port,
+                       auth=auth,
+                       transport="websockets")
     except Exception as e:
         # There is nowt much we can do here, so bail.
         # TODO: Figure out how to tell Alexa something went wrong.
