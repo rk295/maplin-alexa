@@ -245,7 +245,7 @@ if __name__ == "__main__":
     sample_action = {
         "header": {
             "messageId": "01ebf625-0b89-4c4d-b3aa-32340e894688",
-            "name": "TurnOnRequest",
+            "name": "TurnOffRequest",
             "namespace": "Alexa.ConnectedHome.Control",
             "payloadVersion": "2"
         },
@@ -258,4 +258,7 @@ if __name__ == "__main__":
         }
     }
 
+    print "Doing a sample discovery"
     lambda_handler(sample_dsicovery)
+    print "Doing a toggle (tank)"
+    lambda_handler(sample_action)
