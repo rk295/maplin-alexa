@@ -13,13 +13,18 @@ set -euo pipefail
 
 cd "${0%/*}" || exit 1
 
+if [[ -e "vars.sh" ]]; then
+    echo "Local vars detected, including in environment"
+    # shellcheck disable=SC1091
+    source vars.sh
+fi
+
 : ${ZIP_NAME:="rk-test.zip"}
 : ${AWS_PROFILE:="robin"}
 
 functionName="${ZIP_NAME%%.zip}"
 
-aws --profile "$AWS_PROFILE" \
-    lambda \
+aws lambda \
     update-function-code \
     --function-name "$functionName" \
     --zip-file fileb://"$ZIP_NAME"
