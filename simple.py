@@ -6,6 +6,7 @@ import paho.mqtt.publish as publish
 import sys
 import json
 import base64
+import uuid
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s %(funcName)s:%(lineno)d %(message)s')
@@ -16,6 +17,7 @@ logger.info("Starting")
 
 
 def lambda_handler(event=None, context=None):
+
     #
     # lambda_handler is the main entry point for AWS lambda, it receives an
     # 'event' and a lamba context object.
@@ -34,16 +36,17 @@ def lambda_handler(event=None, context=None):
     password = os.getenv('MQTT_PASSWORD', None)
 
     if username is not None and password is not None:
-        logging.debug("Connecting to MQTT with authentication")
+        logging.info("Connecting to MQTT with authentication")
         auth = {'username': username, 'password': password}
     else:
-        logging.debug("Connecting to MQTT without authentication")
+        logging.info("Connecting to MQTT without authentication")
 
     logger.debug("MQTT connecting to host=%s:%s" % (hostname, port))
     logger.debug("config_topic=%s" % config_topic)
     logger.debug("action_topic=%s" % action_topic)
 
     if event['header']['namespace'] == 'Alexa.ConnectedHome.Discovery':
+
         # If this is a Discovery request, hit up the config_topic and parse the
         # JSON in the retained message. This will give us all the possible room
         # names.
@@ -51,9 +54,8 @@ def lambda_handler(event=None, context=None):
         try:
             switch_config = get_config(hostname, port, auth, config_topic)
         except Exception:
-            logger.error("get_config failed, can't continue")
-            # TODO: Handle this, and return an empty discovery object.
-            sys.exit(1)
+            logger.error("Retrieving config failed, returning empty set")
+            switch_config = None
 
         # handle_discovery walks the dict from get_config constructing a valid
         # Alexa response for a discovery request.
@@ -92,10 +94,16 @@ def handle_discovery(switch_config):
         "isReachable": True
     }
 
+    # Generate a unique ID, no idea if this is needed or not, the docs do not
+    # elaborate.
+    message_id = str(uuid.uuid4())
+    logger.info("Response message_id=%s" % message_id)
+
     # Template for the main response, devices get stored under
     # the payload.discoveredAppliances array..
     data = {
         "header": {
+            "messageId": message_id,
             "payloadVersion": "2",
             "namespace": "Alexa.ConnectedHome.Discovery",
             "name": "DiscoverAppliancesResponse"
@@ -108,27 +116,32 @@ def handle_discovery(switch_config):
     # Holding list for all the devices.
     appliances = []
 
-    # For each switch under the 'rooms' top level object, store a device object
-    # in the appliances list.
-    for switch in switch_config["rooms"]:
+    # Only populate the list if we have an actual configuration. Otherwise
+    # Return the template with an empty discoveredAppliances array.
+    if switch_config is not None:
+        # For each switch under the 'rooms' top level object, store a device
+        # object in the appliances list.
+        logger.debug("Found the following rooms:")
 
-        logger.debug("Processing %s" % switch)
+        for switch in switch_config["rooms"]:
 
-        # Grab a copy of the template.
-        switch_data = device_data_template
+            logger.debug("Processing %s" % switch)
 
-        # Push in a friendly description.
-        switch_data["friendlyDescription"] = (
-            "The Maplin socket for the %s" % switch)
+            # Grab a copy of the template.
+            switch_data = device_data_template
 
-        # The actual name of the switch.
-        switch_data["friendlyName"] = switch
+            # Push in a friendly description.
+            switch_data["friendlyDescription"] = (
+                "The Maplin socket for the %s" % switch)
 
-        # The unique id of the device, simply base64 encode the name
-        switch_data["applianceId"] = base64.b64encode(switch)
+            # The actual name of the switch.
+            switch_data["friendlyName"] = switch
 
-        # using .copy() here to avoid adding a reference to the list
-        appliances.append(switch_data.copy())
+            # The unique id of the device, simply base64 encode the name
+            switch_data["applianceId"] = base64.b64encode(switch)
+
+            # using .copy() here to avoid adding a reference to the list
+            appliances.append(switch_data.copy())
 
     # Push the entire appliances list into the response payload.
     data["payload"]["discoveredAppliances"] = appliances
@@ -180,15 +193,23 @@ def handle_control(event, hostname, port, auth, action_topic):
                        transport="websockets")
     except Exception as e:
         # There is nowt much we can do here, so bail.
-        # TODO: Figure out how to tell Alexa something went wrong.
-        logging.error("failed to connect: %s" % e)
-        sys.exit(1)
+        # TODO: Figure out how to tell Alexa something went wrong. The docs:
+        # https://goo.gl/PzEABG don't seem to describe what Alexa is expecting
+        # in a failure situation. So I'm simply going to return None
+        logging.error("Failed to publish message: %s" % e)
+        return None
+    else:
+        logger.info("Room %s turned %s ok" % (switch_name, action))
 
-    # This is the format of a reply Alexa likes, probably should generate a
-    # unique message id.
+    # Generate a unique ID, no idea if this is needed or not, the docs do not
+    # elaborate.
+    message_id = str(uuid.uuid4())
+    logger.info("Response message_id=%s" % message_id)
+
+    # This is the format of a reply Alexa likes
     reply = {
         "header": {
-            "messageId": "26fa11a8-accb-4f66-a272-8b1ff7abd722",
+            "messageId": message_id,
             "name": action_confirmation,
             "namespace": "Alexa.ConnectedHome.Control",
             "payloadVersion": "2"
@@ -202,23 +223,26 @@ def handle_control(event, hostname, port, auth, action_topic):
 
 def get_config(hostname, port, auth, config_topic):
 
+    logger.info("Retrieving switch config from topic=%s" %
+                config_topic)
+
     try:
-        logger.debug("Retrieving a single message from topic=%s" %
-                     config_topic)
         msg = subscribe.simple(config_topic,
                                hostname=hostname,
                                port=port,
                                auth=auth,
-                               transport="websockets"
+                               transport="websockets",
+                               msg_count=1
                                )
-        logger.debug("Retrieved a message payload=%s" % msg.payload)
     except Exception as e:
-        logging.error("failed to connect: %s %s" % (e.errno, e.strerror))
+        logging.error("Failed to retrieve a message: %s" % e)
         raise
+
+    logger.debug("Retrieved a message payload=%s" % msg.payload)
 
     try:
         switches = json.loads(msg.payload)
-    except Exception as e:
+    except Exception:
         logger.error("Failed to parse JSON from message")
         raise
 
