@@ -83,7 +83,6 @@ def handle_discovery(switch_config):
 
     # Template for each individual device.
     device_data_template = {
-        "friendlyDescription": "",
         "modelName": "model 01",
         "version": "0.1",
         "manufacturerName": "RK Industries",
