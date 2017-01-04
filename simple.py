@@ -142,6 +142,25 @@ def handle_discovery(switch_config):
             # using .copy() here to avoid adding a reference to the list
             appliances.append(switch_data.copy())
 
+        # TODO: Mostly the same as the switch section above, consider merging?
+        for scene in switch_config["scenes"]:
+            logger.debug("Processing scene: %s" % switch)
+            # Grab a copy of the template.
+            scene_data = device_data_template
+
+            # Push in a friendly description.
+            scene_data["friendlyDescription"] = (
+                "%s scene" % scene)
+
+            # The actual name of the switch.
+            scene_data["friendlyName"] = "%s scene" % scene
+
+            # The unique id of the device, simply base64 encode the name
+            scene_data["applianceId"] = base64.b64encode(scene)
+
+            # using .copy() here to avoid adding a reference to the list
+            appliances.append(scene_data.copy())
+
     # Push the entire appliances list into the response payload.
     data["payload"]["discoveredAppliances"] = appliances
     logger.debug("Final response data =%s" % json.dumps(data))
@@ -163,7 +182,7 @@ def handle_control(event, hostname, port, auth, action_topic):
         action = "off"
         action_confirmation = "TurnOffConfirmation"
     else:
-        logger.error("Action wasn't TurnOnRequest or TurnOffConfirmation")
+        logger.error("Action wasn't TurnOnRequest or TurnOffRequest")
         logger.error("Can't continue")
         sys.exit(1)
 
@@ -177,7 +196,7 @@ def handle_control(event, hostname, port, auth, action_topic):
 
     # Construct a dictionary of the format our maplin-mqtt listener on the
     # Pi expects.
-    mqtt_payload = {"switch": switch_name, "action": action}
+    mqtt_payload = {"switch": switch_name, "action": action, "source": "alexa"}
     logger.debug("mqtt_payload=%s" % mqtt_payload)
 
     # Try and publish this to MQTT, using websockets as a transport here,
@@ -282,7 +301,30 @@ if __name__ == "__main__":
         }
     }
 
+    # Sample action to turn the 'Downstairs scene' On
+    sample_scene_action = {
+        "header": {
+            "messageId": "01ebf625-0b89-4c4d-b3aa-32340e894688",
+            "name": "TurnOnRequest",
+            "namespace": "Alexa.ConnectedHome.Control",
+            "payloadVersion": "2"
+        },
+        "payload": {
+            "accessToken": "[OAuth Token here]",
+            "appliance": {
+                "additionalApplianceDetails": {
+                    "extraDetail1": "detail about the scene"
+                },
+                "applianceId": "RG93bnN0YWlycw=="
+            }
+        }
+    }
+
     print "Doing a sample discovery"
     lambda_handler(sample_dsicovery)
+
     print "Doing a toggle (tank)"
     lambda_handler(sample_action)
+
+    print "Doing a toggle scene (Downstairs)"
+    lambda_handler(sample_scene_action)
